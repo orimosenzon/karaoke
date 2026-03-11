@@ -91,8 +91,8 @@ def process_url(url: str, title: str = "", on_stage=None):
         stage("cached")
         with open(transcript_path) as f:
             cached = json.load(f)
-        # Backfill credits for older cached files
-        if "lyricist" not in cached and "composer" not in cached:
+        # Backfill credits if missing or both null
+        if not cached.get("lyricist") and not cached.get("composer"):
             credits = _fetch_credits(cached.get("title", title))
             cached["lyricist"] = credits.get("lyricist")
             cached["composer"] = credits.get("composer")
@@ -302,12 +302,21 @@ def _detect_language(text: str) -> str:
     return "en"
 
 
+def _clean_title(title: str) -> str:
+    """Strip YouTube-style suffixes and 'Artist - ' prefix for cleaner MusicBrainz searches."""
+    cleaned = re.sub(r'\s*[\(\[][^\)\]]*[\)\]]', '', title).strip()
+    if ' - ' in cleaned:
+        cleaned = cleaned.split(' - ', 1)[1].strip()
+    return cleaned or title
+
+
 def _fetch_credits(title: str) -> dict:
     """Fetch lyricist and composer from MusicBrainz. Returns dict with 'lyricist' and/or 'composer'."""
     headers = {"User-Agent": "KaraokeApp/1.0 (open-source karaoke project)"}
+    search_title = _clean_title(title)
     try:
         # Step 1: search recording
-        query = urllib.parse.urlencode({"query": f'recording:"{title}"', "fmt": "json", "limit": "5"})
+        query = urllib.parse.urlencode({"query": f'recording:"{search_title}"', "fmt": "json", "limit": "5"})
         req = urllib.request.Request(
             f"https://musicbrainz.org/ws/2/recording?{query}", headers=headers
         )
