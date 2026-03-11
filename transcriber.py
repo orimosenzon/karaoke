@@ -90,7 +90,16 @@ def process_url(url: str, title: str = "", on_stage=None):
     if os.path.exists(transcript_path):
         stage("cached")
         with open(transcript_path) as f:
-            return json.load(f)
+            cached = json.load(f)
+        # Backfill credits for older cached files
+        if "lyricist" not in cached and "composer" not in cached:
+            credits = _fetch_credits(cached.get("title", title))
+            cached["lyricist"] = credits.get("lyricist")
+            cached["composer"] = credits.get("composer")
+            cached["lang"] = _detect_language(_lyrics_text(cached.get("segments", [])))
+            with open(transcript_path, "w") as f:
+                json.dump(cached, f, ensure_ascii=False)
+        return cached
 
     # Try YouTube captions first, then LRClib
     stage("captions")
@@ -105,7 +114,15 @@ def process_url(url: str, title: str = "", on_stage=None):
         else:
             return {"error": "No lyrics found for this song. Try a more popular track."}
 
-    data = {"id": vid_id, "title": title, "url": url, "segments": segments, "source": source}
+    credits = _fetch_credits(title)
+    lang = _detect_language(_lyrics_text(segments))
+    data = {
+        "id": vid_id, "title": title, "url": url,
+        "segments": segments, "source": source,
+        "lyricist": credits.get("lyricist"),
+        "composer": credits.get("composer"),
+        "lang": lang,
+    }
     with open(transcript_path, "w") as f:
         json.dump(data, f, ensure_ascii=False)
 
@@ -259,5 +276,87 @@ def _parse_lrc(lrc: str):
             "words": [],
         })
     return segments
+
+
+def _lyrics_text(segments: list) -> str:
+    """Concatenate all segment texts for language detection."""
+    return " ".join(s.get("text", "") for s in segments[:20])
+
+
+def _detect_language(text: str) -> str:
+    """Detect language from lyrics text using Unicode script ranges."""
+    if not text:
+        return "en"
+    counts = {
+        "he": sum(1 for c in text if "\u0590" <= c <= "\u05FF"),
+        "ar": sum(1 for c in text if "\u0600" <= c <= "\u06FF"),
+        "ru": sum(1 for c in text if "\u0400" <= c <= "\u04FF"),
+        "ja": sum(1 for c in text if "\u3040" <= c <= "\u30FF" or "\u4E00" <= c <= "\u9FFF"),
+        "ko": sum(1 for c in text if "\uAC00" <= c <= "\uD7AF"),
+        "zh": sum(1 for c in text if "\u4E00" <= c <= "\u9FFF"),
+    }
+    threshold = len(text) * 0.08
+    best = max(counts, key=counts.get)
+    if counts[best] > threshold:
+        return best
+    return "en"
+
+
+def _fetch_credits(title: str) -> dict:
+    """Fetch lyricist and composer from MusicBrainz. Returns dict with 'lyricist' and/or 'composer'."""
+    headers = {"User-Agent": "KaraokeApp/1.0 (open-source karaoke project)"}
+    try:
+        # Step 1: search recording
+        query = urllib.parse.urlencode({"query": f'recording:"{title}"', "fmt": "json", "limit": "5"})
+        req = urllib.request.Request(
+            f"https://musicbrainz.org/ws/2/recording?{query}", headers=headers
+        )
+        with urllib.request.urlopen(req, timeout=6) as resp:
+            recordings = json.loads(resp.read()).get("recordings", [])
+        if not recordings:
+            return {}
+        mbid = recordings[0]["id"]
+
+        # Step 2: recording → work relations
+        req = urllib.request.Request(
+            f"https://musicbrainz.org/ws/2/recording/{mbid}?inc=work-rels&fmt=json", headers=headers
+        )
+        with urllib.request.urlopen(req, timeout=6) as resp:
+            rec_data = json.loads(resp.read())
+        work_mbid = next(
+            (r["work"]["id"] for r in rec_data.get("relations", []) if r.get("target-type") == "work"),
+            None,
+        )
+        if not work_mbid:
+            return {}
+
+        # Step 3: work → artist relations (composer / lyricist / writer)
+        req = urllib.request.Request(
+            f"https://musicbrainz.org/ws/2/work/{work_mbid}?inc=artist-rels&fmt=json", headers=headers
+        )
+        with urllib.request.urlopen(req, timeout=6) as resp:
+            work_data = json.loads(resp.read())
+
+        lyricists, composers = [], []
+        for rel in work_data.get("relations", []):
+            role = rel.get("type", "").lower()
+            name = rel.get("artist", {}).get("name", "")
+            if not name:
+                continue
+            if role == "lyricist":
+                lyricists.append(name)
+            elif role == "composer":
+                composers.append(name)
+            elif role == "writer":
+                lyricists.append(name)
+                composers.append(name)
+
+        return {
+            "lyricist": ", ".join(lyricists) or None,
+            "composer": ", ".join(composers) or None,
+        }
+    except Exception as e:
+        print(f"Credits fetch failed: {e}")
+        return {}
 
 
