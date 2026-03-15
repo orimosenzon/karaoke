@@ -423,7 +423,7 @@ def _mymemory_translate(text: str, source: str, target: str) -> str:
 
 def translate_segments(segments: list, target_lang: str, source_lang: str = None) -> list:
     """Translate segment texts using MyMemory free API. Returns list of translated strings."""
-    src = source_lang or "auto"
+    src = "auto"
     texts = [seg["text"].strip() for seg in segments]
 
     def translate_one(text):
