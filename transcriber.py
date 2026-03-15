@@ -467,6 +467,8 @@ def translate_segments(segments: list, target_lang: str, source_lang: str = None
     src = source_lang or "en"
     texts = [seg["text"].strip() for seg in segments]
 
+    errors = []
+
     def translate_one(text):
         if not text:
             return ""
@@ -476,9 +478,13 @@ def translate_segments(segments: list, target_lang: str, source_lang: str = None
             return result
         except Exception as e:
             print(f"[translate] FAILED '{text[:40]}': {e}")
+            errors.append(str(e))
             return text
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-        return list(executor.map(translate_one, texts))
+        results = list(executor.map(translate_one, texts))
+    if errors:
+        raise RuntimeError(f"Translation failed ({len(errors)} errors): {errors[0]}")
+    return results
 
 
