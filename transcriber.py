@@ -306,21 +306,25 @@ def _detect_language(text: str) -> str:
     return "en"
 
 
-def _clean_title(title: str) -> str:
-    """Strip YouTube-style suffixes and 'Artist - ' prefix for cleaner MusicBrainz searches."""
+def _parse_title_artist(title: str):
+    """Split a YouTube title into (song_title, artist_or_None), stripping suffixes like (Official Video)."""
     cleaned = re.sub(r'\s*[\(\[][^\)\]]*[\)\]]', '', title).strip()
     if ' - ' in cleaned:
-        cleaned = cleaned.split(' - ', 1)[1].strip()
-    return cleaned or title
+        parts = cleaned.split(' - ', 1)
+        return parts[0].strip(), parts[1].strip()
+    return cleaned or title, None
 
 
 def _fetch_credits(title: str) -> dict:
     """Fetch lyricist and composer from MusicBrainz. Returns dict with 'lyricist' and/or 'composer'."""
     headers = {"User-Agent": "KaraokeApp/1.0 (open-source karaoke project)"}
-    search_title = _clean_title(title)
+    song_title, artist = _parse_title_artist(title)
+    mb_query = f'recording:"{song_title}"'
+    if artist:
+        mb_query += f' artist:"{artist}"'
     try:
         # Step 1: search recording
-        query = urllib.parse.urlencode({"query": f'recording:"{search_title}"', "fmt": "json", "limit": "5"})
+        query = urllib.parse.urlencode({"query": mb_query, "fmt": "json", "limit": "5"})
         req = urllib.request.Request(
             f"https://musicbrainz.org/ws/2/recording?{query}", headers=headers
         )
