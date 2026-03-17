@@ -1,4 +1,6 @@
 static/
+!static/img/
+!static/img/**
 __pycache__/
 *.pyc
 *.pyo
