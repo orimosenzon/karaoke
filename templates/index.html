@@ -295,28 +295,33 @@
       max-height: 32vh;
     }
 
-    /* Responsive video height based on screen height */
-    @media (max-height: 750px) {
-      #yt-player-wrap { max-height: 26vh; }
-      #screen-player { padding: 8px 16px 0; }
-      #song-title { font-size: 1.2rem; margin-bottom: 5px; }
-      #song-credits { margin-bottom: 2px; }
+    /* Responsive layout for mobile — offset controls go below video as a horizontal row */
+    @media (max-height: 900px) {
+      #player-footer { display: none; }
+      #song-title { font-size: 1.1rem; margin-bottom: 4px; }
+      #song-credits { margin-bottom: 2px; font-size: 0.75rem; }
       #translation-bar { margin-bottom: 5px; }
+      #share-btn { padding: 6px 12px; font-size: 0.8rem; }
+      #video-row { flex-direction: column; gap: 4px; }
+      #yt-player-wrap { order: 1; flex: none; width: 100%; max-height: 26vh; }
+      #offset-controls { order: 2; flex-direction: row; gap: 4px; justify-content: center; width: 100%; }
+      #offset-controls button { width: 38px; padding: 4px 6px; font-size: 0.72rem; }
+      #offset-display { width: 42px; font-size: 0.72rem; }
       #lyrics { gap: 10px; padding-bottom: 16px; }
       .segment { padding: 10px 14px; }
-      .word { font-size: 1.15rem; }
-      #player-footer { display: none; }
+      .word { font-size: 1.1rem; }
     }
-    @media (max-height: 650px) {
+    @media (max-height: 750px) {
+      #screen-player { padding: 8px 16px 0; }
       #yt-player-wrap { max-height: 22vh; }
-      #screen-player { padding: 6px 12px 0; }
-      #song-title { font-size: 1.1rem; }
-      #lyrics { gap: 8px; }
-      .segment { padding: 8px 12px; gap: 4px; }
-      .word { font-size: 1.05rem; }
     }
-    @media (max-height: 550px) {
+    @media (max-height: 600px) {
+      #screen-player { padding: 6px 12px 0; }
       #yt-player-wrap { max-height: 18vh; }
+      #song-title { font-size: 1rem; }
+      #lyrics { gap: 6px; }
+      .segment { padding: 8px 12px; gap: 4px; }
+      .word { font-size: 1rem; }
     }
 
     #lyrics {
