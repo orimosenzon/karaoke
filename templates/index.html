@@ -233,13 +233,6 @@
       line-height: 1.5;
     }
 
-    #source-label {
-      font-size: 0.8rem;
-      color: #666;
-      margin-bottom: 10px;
-      text-align: center;
-    }
-
     #video-row {
       width: 100%;
       max-width: 700px;
@@ -300,6 +293,30 @@
       aspect-ratio: 16/9;
       background: #111;
       max-height: 32vh;
+    }
+
+    /* Responsive video height based on screen height */
+    @media (max-height: 750px) {
+      #yt-player-wrap { max-height: 26vh; }
+      #screen-player { padding: 8px 16px 0; }
+      #song-title { font-size: 1.2rem; margin-bottom: 5px; }
+      #song-credits { margin-bottom: 2px; }
+      #translation-bar { margin-bottom: 5px; }
+      #lyrics { gap: 10px; padding-bottom: 16px; }
+      .segment { padding: 10px 14px; }
+      .word { font-size: 1.15rem; }
+      #player-footer { display: none; }
+    }
+    @media (max-height: 650px) {
+      #yt-player-wrap { max-height: 22vh; }
+      #screen-player { padding: 6px 12px 0; }
+      #song-title { font-size: 1.1rem; }
+      #lyrics { gap: 8px; }
+      .segment { padding: 8px 12px; gap: 4px; }
+      .word { font-size: 1.05rem; }
+    }
+    @media (max-height: 550px) {
+      #yt-player-wrap { max-height: 18vh; }
     }
 
     #lyrics {
@@ -403,7 +420,6 @@
       <div id="progress-wrap"><div id="progress-bar"></div></div>
       <div id="song-title"></div>
       <div id="song-credits"></div>
-      <div id="source-label"></div>
       <div id="translation-bar">
         <select id="translate-select" onchange="onTranslateLangChange()">
           <option value="">🌐 Translate…</option>
@@ -728,7 +744,7 @@
         document.getElementById('song-title').textContent = currentSongTitle;
         renderCredits(data);
         const sourceMap = { youtube_captions: 'YouTube captions', lrclib: 'LRClib', cached: 'cached' };
-        document.getElementById('source-label').textContent = data.source ? '(' + (sourceMap[data.source] || data.source) + ')' : '';
+        console.log('[Letras] Lyrics source:', sourceMap[data.source] || data.source || 'unknown');
         renderLyrics(segments);
 
         currentSongId = data.id;
