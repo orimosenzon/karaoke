@@ -480,7 +480,7 @@
       </a>
       <span class="footer-sep">·</span>
       <span class="footer-credit">
-        <img src="/static/img/ori-head.png" alt="Ori Mosenzon" style="width:22px;height:22px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:5px;">Ori Mosenzon
+        <img src="/static/img/ori-head.png" alt="Ori Mosenzon" style="width:22px;height:22px;border-radius:50%;object-fit:cover;object-position:50% 20%;vertical-align:middle;margin-right:5px;">Ori Mosenzon
       </span>
     </footer>
   </div>
@@ -630,6 +630,7 @@
       ['search', 'results', 'player'].forEach(s => {
         document.getElementById(`screen-${s}`).classList.toggle('hidden', s !== name);
       });
+      document.getElementById('site-footer').classList.toggle('hidden', name === 'player');
     }
 
     function showSearch() {
@@ -1033,7 +1034,7 @@
     </a>
     <span class="footer-sep">·</span>
     <span class="footer-credit">
-      <img src="/static/img/ori-head.png" alt="Ori Mosenzon" style="width:22px;height:22px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:5px;">Ori Mosenzon
+      <img src="/static/img/ori-head.png" alt="Ori Mosenzon" style="width:22px;height:22px;border-radius:50%;object-fit:cover;object-position:50% 20%;vertical-align:middle;margin-right:5px;">Ori Mosenzon
     </span>
   </footer>
 </body>
