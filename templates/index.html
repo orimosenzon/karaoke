@@ -1376,6 +1376,20 @@
     }
     function onZenKeydown(e) {
       if (e.key === 'Escape') toggleZen();
+      if (e.key === ' ') {
+        e.preventDefault();
+        if (ytPlayer && ytPlayer.getPlayerState) {
+          if (ytPlayer.getPlayerState() === 1) ytPlayer.pauseVideo();
+          else ytPlayer.playVideo();
+        }
+      }
+      if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+        e.preventDefault();
+        if (ytPlayer && typeof ytPlayer.getCurrentTime === 'function') {
+          const delta = e.key === 'ArrowRight' ? 5 : -5;
+          ytPlayer.seekTo(ytPlayer.getCurrentTime() + delta, true);
+        }
+      }
     }
 
     async function shareUrl() {
