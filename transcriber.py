@@ -502,11 +502,40 @@ def fetch_wikipedia_summary(song_title: str, artist: str = "", lang: str = "en")
     with urllib.request.urlopen(req, timeout=8) as resp:
         summary_data = json.loads(resp.read())
 
+    page_url = summary_data.get("content_urls", {}).get("desktop", {}).get("page", "")
+    short_summary = summary_data.get("extract", "")
+
+    # Fetch full article text via MediaWiki API
+    full_content = short_summary
+    try:
+        params = urllib.parse.urlencode({
+            "action": "query",
+            "prop": "extracts",
+            "explaintext": "true",
+            "exsectionformat": "plain",
+            "titles": best["title"],
+            "format": "json",
+        })
+        req2 = urllib.request.Request(
+            f"https://{wiki_lang}.wikipedia.org/w/api.php?{params}",
+            headers={"User-Agent": "Letras/1.0"}
+        )
+        with urllib.request.urlopen(req2, timeout=8) as resp2:
+            pages = json.loads(resp2.read()).get("query", {}).get("pages", {})
+            if pages:
+                page = next(iter(pages.values()))
+                text = page.get("extract", "")
+                if text:
+                    full_content = text[:8000]  # cap to avoid huge payloads
+    except Exception:
+        pass  # fall back to short summary
+
     return {
         "found": True,
         "title": summary_data.get("title", ""),
-        "summary": summary_data.get("extract", ""),
-        "url": summary_data.get("content_urls", {}).get("desktop", {}).get("page", ""),
+        "summary": short_summary,
+        "content": full_content,
+        "url": page_url,
     }
 
 

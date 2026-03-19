@@ -191,7 +191,11 @@
       margin-bottom: 8px;
       text-align: center;
       max-width: 700px;
+      cursor: pointer;
+      text-decoration: underline dotted #5eead466;
+      transition: opacity 0.2s;
     }
+    #song-title:hover { opacity: 0.8; }
 
     .credits-writer {
       cursor: pointer;
@@ -215,11 +219,12 @@
       background: #1a1a1a;
       border: 1px solid #333;
       border-radius: 14px;
-      padding: 20px 22px;
+      padding: 20px 22px 0;
       max-width: 560px;
       width: 100%;
       max-height: 80vh;
-      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
       position: relative;
       box-shadow: 0 8px 40px #000a;
     }
@@ -228,19 +233,28 @@
       font-weight: bold;
       color: #5eead4;
       margin-bottom: 10px;
+      flex-shrink: 0;
     }
     #wiki-modal-body {
       font-size: 0.9rem;
       color: #ccc;
       line-height: 1.6;
-      margin-bottom: 14px;
       white-space: pre-line;
+      overflow-y: auto;
+      flex: 1;
+      min-height: 0;
+      padding-right: 6px;
+      margin-bottom: 0;
     }
     #wiki-modal-footer {
       display: flex;
       align-items: center;
       gap: 10px;
       flex-wrap: wrap;
+      flex-shrink: 0;
+      padding: 12px 0 18px;
+      border-top: 1px solid #222;
+      margin-top: 10px;
     }
     #wiki-translate-select {
       background: #111;
@@ -807,55 +821,61 @@
 
     function renderCredits(data) {
       const labels = CREDITS_LABELS[data.lang] || CREDITS_LABELS.en;
+      const lang = data.lang || 'en';
       const lyricist  = data.lyricist  || null;
       const composer  = data.composer  || null;
       const arranger  = data.arranger  || null;
       const performer = data.performer || null;
 
-      // Determine writer text
-      let writerText = null;
-      if (lyricist && composer && lyricist === composer) {
-        writerText = `${labels.both}: ${lyricist}`;
-      } else {
-        const parts = [];
-        if (composer) parts.push(`${labels.music}: ${composer}`);
-        if (lyricist) parts.push(`${labels.lyrics}: ${lyricist}`);
-        if (parts.length) writerText = parts.join(' · ');
-      }
-
       const container = document.getElementById('song-credits');
       container.textContent = '';
 
-      const allParts = [];
-      if (performer) allParts.push({ text: `${labels.performer}: ${performer}`, writer: false });
-      if (writerText) allParts.push({ text: writerText, writer: true });
-      if (arranger)  allParts.push({ text: `${labels.arranger}: ${arranger}`, writer: false });
+      // Helper: append "Label: " then each name as a clickable wiki span
+      function appendCredit(label, namesStr) {
+        container.appendChild(document.createTextNode(`${label}: `));
+        namesStr.split(/,\s*/).forEach((name, i) => {
+          if (i > 0) container.appendChild(document.createTextNode(', '));
+          const span = document.createElement('span');
+          span.className = 'credits-writer';
+          span.textContent = name.trim();
+          span.title = 'Wikipedia';
+          span.onclick = () => openWikiModal({ song_title: name.trim(), artist: '', lang });
+          container.appendChild(span);
+        });
+      }
 
-      // Store wiki data for this song
-      wikiSongData = {
+      const parts = [];
+      if (performer) parts.push(() => appendCredit(labels.performer, performer));
+      if (lyricist && composer && lyricist === composer) {
+        parts.push(() => appendCredit(labels.both, lyricist));
+      } else {
+        if (composer) parts.push(() => appendCredit(labels.music, composer));
+        if (lyricist) parts.push(() => appendCredit(labels.lyrics, lyricist));
+      }
+      if (arranger) parts.push(() => appendCredit(labels.arranger, arranger));
+
+      parts.forEach((fn, i) => {
+        if (i > 0) container.appendChild(document.createTextNode(' · '));
+        fn();
+      });
+
+      // Song title click → opens wiki modal for the song
+      const songSubject = {
         song_title: data.title || currentSongTitle || '',
         artist: performer || '',
-        lang: data.lang || 'en',
+        lang,
       };
+      document.getElementById('song-title').onclick = () => openWikiModal(songSubject);
+
+      wikiOriginalText = null;
+      wikiTranslationCache = {};
+    }
+
+    async function openWikiModal(subject) {
+      wikiSongData = subject;
       wikiOriginalText = null;
       wikiTranslationCache = {};
 
-      allParts.forEach((part, i) => {
-        if (i > 0) container.appendChild(document.createTextNode(' · '));
-        if (part.writer) {
-          const span = document.createElement('span');
-          span.className = 'credits-writer';
-          span.textContent = part.text;
-          span.title = 'Wikipedia';
-          span.onclick = openWikiModal;
-          container.appendChild(span);
-        } else {
-          container.appendChild(document.createTextNode(part.text));
-        }
-      });
-    }
-
-    async function openWikiModal() {
       const overlay = document.getElementById('wiki-modal-overlay');
       overlay.classList.add('open');
       document.getElementById('wiki-modal-title').textContent = '';
@@ -876,9 +896,9 @@
           document.getElementById('wiki-modal-body').textContent = 'No Wikipedia article found for this song.';
           return;
         }
-        wikiOriginalText = data.summary;
+        wikiOriginalText = data.content || data.summary;
         document.getElementById('wiki-modal-title').textContent = data.title;
-        document.getElementById('wiki-modal-body').textContent = data.summary;
+        document.getElementById('wiki-modal-body').textContent = data.content || data.summary;
         if (data.url) {
           document.getElementById('wiki-modal-link').href = data.url;
         }
