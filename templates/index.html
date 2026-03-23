@@ -321,6 +321,16 @@
       font-size: 0.85rem;
       font-style: italic;
     }
+    #wiki-modal-image {
+      float: right;
+      margin: 0 0 10px 14px;
+      max-width: 120px;
+      max-height: 150px;
+      border-radius: 8px;
+      object-fit: cover;
+      border: 1px solid #333;
+      display: none;
+    }
 
     #song-credits {
       font-size: 0.8rem;
@@ -905,7 +915,7 @@
       const container = document.getElementById('song-credits');
       container.textContent = '';
 
-      // Helper: append "Label: " then each name as a clickable wiki span
+      // Helper: append "Label: " then each name as a hoverable/clickable wiki span
       function appendCredit(label, namesStr) {
         container.appendChild(document.createTextNode(`${label}: `));
         namesStr.split(/,\s*/).forEach((name, i) => {
@@ -914,7 +924,13 @@
           span.className = 'credits-writer';
           span.textContent = name.trim();
           span.title = 'Wikipedia';
-          span.onclick = () => openWikiModal({ song_title: name.trim(), artist: '', lang });
+          const subject = { song_title: name.trim(), artist: '', lang };
+          let hoverTimer = null;
+          span.addEventListener('mouseenter', () => {
+            hoverTimer = setTimeout(() => openWikiModal(subject), 400);
+          });
+          span.addEventListener('mouseleave', () => clearTimeout(hoverTimer));
+          span.onclick = () => openWikiModal(subject);
           container.appendChild(span);
         });
       }
@@ -940,7 +956,13 @@
         artist: performer || '',
         lang,
       };
-      document.getElementById('song-title').onclick = () => openWikiModal(songSubject);
+      const songTitleEl = document.getElementById('song-title');
+      let songTitleHoverTimer = null;
+      songTitleEl.onmouseenter = () => {
+        songTitleHoverTimer = setTimeout(() => openWikiModal(songSubject), 400);
+      };
+      songTitleEl.onmouseleave = () => clearTimeout(songTitleHoverTimer);
+      songTitleEl.onclick = () => openWikiModal(songSubject);
 
       wikiOriginalText = null;
       wikiTranslationCache = {};
@@ -954,7 +976,8 @@
       const overlay = document.getElementById('wiki-modal-overlay');
       overlay.classList.add('open');
       document.getElementById('wiki-modal-title').textContent = '';
-      document.getElementById('wiki-modal-body').innerHTML = '<span id="wiki-modal-loading">Searching Wikipedia…</span>';
+      const body = document.getElementById('wiki-modal-body');
+      body.innerHTML = '<span id="wiki-modal-loading">Searching Wikipedia…</span>';
       document.getElementById('wiki-modal-link').href = '#';
       document.getElementById('wiki-translate-select').value = '';
 
@@ -973,7 +996,16 @@
         }
         wikiOriginalText = data.content || data.summary;
         document.getElementById('wiki-modal-title').textContent = data.title;
-        document.getElementById('wiki-modal-body').textContent = data.content || data.summary;
+        // Rebuild body: image (if any) floated right, then text
+        body.innerHTML = '';
+        if (data.image) {
+          const imgEl = document.createElement('img');
+          imgEl.id = 'wiki-modal-image';
+          imgEl.alt = data.title;
+          imgEl.src = data.image;
+          body.appendChild(imgEl);
+        }
+        body.appendChild(document.createTextNode(data.content || data.summary));
         if (data.url) {
           document.getElementById('wiki-modal-link').href = data.url;
         }

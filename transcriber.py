@@ -609,6 +609,7 @@ def fetch_wikipedia_summary(song_title: str, artist: str = "", lang: str = "en")
         "summary": short_summary,
         "content": full_content,
         "url": page_url,
+        "image": summary_data.get("thumbnail", {}).get("source") or None,
     }
 
 
