@@ -103,17 +103,18 @@ def process_url(url: str, title: str = "", on_stage=None):
         stage("cached")
         with open(transcript_path) as f:
             cached = json.load(f)
-        # Backfill credits if missing or from old search logic (credits_version < 4)
+        # Backfill credits if missing or from old search logic (credits_version < 5)
         # v3: added score-based confidence threshold to avoid wrong performers
         # v4: fixed bilingual title parsing (strip Latin transliteration suffixes)
-        if cached.get("credits_version", 1) < 4:
+        # v5: try both Artist-Song and Song-Artist orderings, pick best title match
+        if cached.get("credits_version", 1) < 5:
             credits = _fetch_credits(cached.get("title", title))
             cached["lyricist"]  = credits.get("lyricist")
             cached["composer"]  = credits.get("composer")
             cached["arranger"]  = credits.get("arranger")
             cached["performer"] = credits.get("performer")
             cached["lang"] = _detect_language(_lyrics_text(cached.get("segments", [])))
-            cached["credits_version"] = 4
+            cached["credits_version"] = 5
             with open(transcript_path, "w") as f:
                 json.dump(cached, f, ensure_ascii=False)
         return cached
@@ -146,7 +147,7 @@ def process_url(url: str, title: str = "", on_stage=None):
         "arranger":  credits.get("arranger"),
         "performer": credits.get("performer"),
         "lang": lang,
-        "credits_version": 4,
+        "credits_version": 5,
     }
     with open(transcript_path, "w") as f:
         json.dump(data, f, ensure_ascii=False)
@@ -426,21 +427,50 @@ def _parse_title_artist(title: str):
     return cleaned or title, None
 
 
+def _mb_search_recording(song_title: str, artist: str, headers: dict):
+    """Search MusicBrainz for a recording. Returns (score, recordings list)."""
+    mb_query = f'recording:"{song_title}"'
+    if artist:
+        mb_query += f' artist:"{artist}"'
+    query = urllib.parse.urlencode({"query": mb_query, "fmt": "json", "limit": "5"})
+    req = urllib.request.Request(
+        f"https://musicbrainz.org/ws/2/recording?{query}", headers=headers
+    )
+    with urllib.request.urlopen(req, timeout=6) as resp:
+        recordings = json.loads(resp.read()).get("recordings", [])
+    top_score = int(recordings[0].get("score", 0)) if recordings else 0
+    return top_score, recordings
+
+
 def _fetch_credits(title: str) -> dict:
     """Fetch lyricist and composer from MusicBrainz. Returns dict with 'lyricist' and/or 'composer'."""
     headers = {"User-Agent": "LetrasApp/1.0 (open-source letras project)"}
     song_title, artist = _parse_title_artist(title)
-    mb_query = f'recording:"{song_title}"'
-    if artist:
-        mb_query += f' artist:"{artist}"'
     try:
-        # Step 1: search recording
-        query = urllib.parse.urlencode({"query": mb_query, "fmt": "json", "limit": "5"})
-        req = urllib.request.Request(
-            f"https://musicbrainz.org/ws/2/recording?{query}", headers=headers
-        )
-        with urllib.request.urlopen(req, timeout=6) as resp:
-            recordings = json.loads(resp.read()).get("recordings", [])
+        # Step 1: search recording — try both "Artist - Song" and "Song - Artist"
+        # orderings and pick whichever returns a top result whose title more closely
+        # matches the queried song name. MusicBrainz scores are often equal (100) for
+        # both, so title similarity is a better tiebreaker.
+        def _title_sim(queried: str, returned: str) -> float:
+            q, r = queried.lower().strip(), returned.lower().strip()
+            if q == r:
+                return 1.0
+            if q in r or r in q:
+                return 0.8
+            q_words, r_words = set(q.split()), set(r.split())
+            if q_words and r_words:
+                return len(q_words & r_words) / max(len(q_words), len(r_words))
+            return 0.0
+
+        score, recordings = _mb_search_recording(song_title, artist, headers)
+        sim = _title_sim(song_title, recordings[0]["title"]) if recordings else 0.0
+        if artist:
+            rev_score, rev_recordings = _mb_search_recording(artist, song_title, headers)
+            rev_sim = _title_sim(artist, rev_recordings[0]["title"]) if rev_recordings else 0.0
+            if rev_sim > sim or (rev_sim == sim and rev_score > score):
+                score, recordings = rev_score, rev_recordings
+                song_title, artist = artist, song_title  # keep consistent for min_score logic
+
         if not recordings:
             return {}
         rec = recordings[0]
@@ -449,7 +479,6 @@ def _fetch_credits(title: str) -> dict:
         # Extract performer from artist-credit in search result,
         # but only if MusicBrainz is confident this is the right recording.
         # Without an artist in the query the top result may be a random cover.
-        score = int(rec.get("score", 0))
         min_score = 90 if not artist else 70
         artist_credits = rec.get("artist-credit", [])
         performer_names = [a["artist"]["name"] for a in artist_credits if isinstance(a, dict) and "artist" in a]
