@@ -237,26 +237,12 @@
       display: none;
       position: fixed;
       inset: 0;
-      background: #000000aa;
       z-index: 100;
       align-items: center;
       justify-content: center;
       padding: 20px;
-      pointer-events: auto;
     }
     #wiki-modal-overlay.open { display: flex; }
-    /* In hover mode: no backdrop, overlay doesn't block clicks on the page */
-    #wiki-modal-overlay.open.hover-mode {
-      background: transparent;
-      pointer-events: none;
-    }
-    #wiki-modal-overlay.open.hover-mode #wiki-modal {
-      pointer-events: auto;
-    }
-    /* Pinned (click) mode: show backdrop */
-    #wiki-modal-overlay.open.pinned-backdrop {
-      background: #000000aa;
-    }
     #wiki-modal {
       background: #1a1a1a;
       border: 1px solid #333;
@@ -1025,9 +1011,8 @@
       wikiCurrentKey = key;
 
       const overlay = document.getElementById('wiki-modal-overlay');
-      overlay.classList.remove('hover-mode', 'pinned-backdrop');
       overlay.classList.add('open');
-      if (wikiHoverMode) overlay.classList.add('hover-mode');
+      _applyWikiOverlayMode();
       document.getElementById('wiki-modal-link').href = '#';
 
       // Serve from cache instantly — no flicker, no network wait
@@ -1060,17 +1045,30 @@
       }
     }
 
+    function _applyWikiOverlayMode() {
+      const overlay = document.getElementById('wiki-modal-overlay');
+      if (wikiHoverMode) {
+        overlay.style.background = 'transparent';
+        overlay.style.pointerEvents = 'none';
+        document.getElementById('wiki-modal').style.pointerEvents = 'auto';
+      } else {
+        overlay.style.background = '#000000aa';
+        overlay.style.pointerEvents = 'auto';
+        document.getElementById('wiki-modal').style.pointerEvents = '';
+      }
+    }
     function _pinWikiModal() {
-      // Convert hover-mode to pinned (click) mode — stays open until explicitly closed
       if (!wikiHoverMode) return;
       wikiHoverMode = false;
       _cancelWikiClose();
-      document.getElementById('wiki-modal-overlay').classList.remove('hover-mode');
-      document.getElementById('wiki-modal-overlay').classList.add('pinned-backdrop');
+      _applyWikiOverlayMode();
     }
     function closeWikiModal() {
       const overlay = document.getElementById('wiki-modal-overlay');
-      overlay.classList.remove('open', 'hover-mode', 'pinned-backdrop');
+      overlay.classList.remove('open');
+      overlay.style.background = '';
+      overlay.style.pointerEvents = '';
+      document.getElementById('wiki-modal').style.pointerEvents = '';
       wikiHoverMode = false;
     }
 
