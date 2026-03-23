@@ -1025,9 +1025,9 @@
       wikiCurrentKey = key;
 
       const overlay = document.getElementById('wiki-modal-overlay');
+      overlay.classList.remove('hover-mode', 'pinned-backdrop');
       overlay.classList.add('open');
       if (wikiHoverMode) overlay.classList.add('hover-mode');
-      else overlay.classList.remove('hover-mode');
       document.getElementById('wiki-modal-link').href = '#';
 
       // Serve from cache instantly — no flicker, no network wait
