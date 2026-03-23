@@ -754,7 +754,7 @@
         <div id="wiki-modal-title"></div>
         <div id="wiki-modal-body"></div>
         <div id="wiki-modal-footer">
-          <select id="wiki-translate-select" onchange="onWikiTranslate()">
+          <select id="wiki-translate-select" onchange="onWikiTranslate()" onmousedown="_pinWikiModal()">
             <option value="">🌐 Translate…</option>
             <option value="en">English</option>
             <option value="he">עברית</option>
@@ -927,7 +927,7 @@
     // fromModal=false → user left the trigger link (long grace, 2000ms to reach the centered modal)
     function _scheduleWikiClose(fromModal) {
       if (!wikiHoverMode) return;
-      wikiCloseTimer = setTimeout(() => { closeWikiModal(); }, fromModal ? 300 : 2000);
+      wikiCloseTimer = setTimeout(() => { closeWikiModal(); }, fromModal ? 800 : 2000);
     }
     function _isWikiOpen() {
       return document.getElementById('wiki-modal-overlay').classList.contains('open');
