@@ -584,26 +584,53 @@ def fetch_wikipedia_summary(song_title: str, artist: str = "", lang: str = "en")
         with urllib.request.urlopen(req, timeout=8) as resp:
             return json.loads(resp.read()).get("query", {}).get("search", [])
 
-    results = _search(f"{song_title} {artist}".strip())
-    if not results:
+    def _fetch_summary(title: str):
+        encoded = urllib.parse.quote(title.replace(" ", "_"))
+        url = f"https://{wiki_lang}.wikipedia.org/api/rest_v1/page/summary/{encoded}"
+        req = urllib.request.Request(url, headers={"User-Agent": "Letras/1.0"})
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            return json.loads(resp.read())
+
+    def _pick_best(results):
+        title_lower = song_title.lower()
+        best = results[0]
+        for r in results:
+            if r["title"].lower() == title_lower:
+                return r
+            if title_lower in r["title"].lower() and title_lower not in best["title"].lower():
+                best = r
+        return best
+
+    def _try_query(query: str):
+        """Search, pick best result, fetch summary. Returns (best, summary_data) or None if disambiguation."""
+        results = _search(query)
+        if not results:
+            return None
+        best = _pick_best(results)
+        summary = _fetch_summary(best["title"])
+        if summary.get("type") == "disambiguation":
+            return None
+        return best, summary
+
+    # Build fallback queries. When artist is empty we're searching for a person (credit name).
+    base = f"{song_title} {artist}".strip()
+    if artist:
+        # Searching for a song — try with explicit disambiguation suffix
+        queries = [base, f"{song_title} song", f"{song_title} canción"]
+    else:
+        # Searching for a person (credit name)
+        queries = [base, f"{song_title} singer", f"{song_title} musician", f"{song_title} cantante"]
+
+    result = None
+    for query in queries:
+        result = _try_query(query)
+        if result:
+            break
+
+    if not result:
         return {"found": False}
 
-    # Prefer result whose title closely matches the song title
-    title_lower = song_title.lower()
-    best = results[0]
-    for r in results:
-        if r["title"].lower() == title_lower:
-            best = r
-            break
-        if title_lower in r["title"].lower() and title_lower not in best["title"].lower():
-            best = r
-
-    encoded_title = urllib.parse.quote(best["title"].replace(" ", "_"))
-    summary_url = f"https://{wiki_lang}.wikipedia.org/api/rest_v1/page/summary/{encoded_title}"
-    req = urllib.request.Request(summary_url, headers={"User-Agent": "Letras/1.0"})
-    with urllib.request.urlopen(req, timeout=8) as resp:
-        summary_data = json.loads(resp.read())
-
+    best, summary_data = result
     page_url = summary_data.get("content_urls", {}).get("desktop", {}).get("page", "")
     short_summary = summary_data.get("extract", "")
 
