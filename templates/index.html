@@ -1124,7 +1124,7 @@
       starting:  { label: 'Starting…',                hint: 'Connecting to YouTube…' },
       captions:  { label: 'Fetching captions…',       hint: 'Looking for word-by-word timing in YouTube auto-captions' },
       lrclib:    { label: 'Searching lyrics…',        hint: 'No captions found — checking LRClib lyrics database' },
-      shironet:  { label: 'Searching Shironet…',      hint: 'Opening a browser to search shironet.mako.co.il — this takes ~30 seconds' },
+      shironet:  { label: 'Searching Shironet…',      hint: 'Opening a headless browser for shironet.mako.co.il — typically 20–60 seconds' },
       cached:    { label: 'Loading from cache…',      hint: '' },
     };
     // Time-based escalation hints per stage (seconds → message)
@@ -1132,7 +1132,7 @@
       starting:  [[8,  'Cold start — server is waking up, hang tight…'], [20, 'Still starting… (Railway free tier wakes up slowly)']],
       captions:  [[10, 'YouTube is slow to respond — almost there…']],
       lrclib:    [[8,  'Checking multiple lyrics databases…']],
-      shironet:  [[15, 'Still loading Shironet… the browser needs a moment'], [45, 'Shironet is taking longer than usual — please wait']],
+      shironet:  [[20, 'Still searching Shironet… almost there'], [50, 'Shironet is slow today — please hold on']],
     };
 
     let _hintStage = null, _hintTimers = [];

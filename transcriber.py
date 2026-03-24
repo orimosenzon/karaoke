@@ -592,15 +592,17 @@ def _try_shironet(title: str):
 
     song_title, artist = _parse_title_artist(title)
 
-    # Build search queries from most specific to least
-    queries = []
-    if artist:
-        queries.append(f"{song_title} {artist}")
-    queries.append(song_title)
-    # Strip any Latin characters (transliteration) to get pure Hebrew title
+    # Build search queries — song title first (Shironet ranks by title match),
+    # then title+artist as fallback for disambiguation.
+    # Strip Latin transliteration to get pure Hebrew title.
     he_only = re.sub(r'[a-zA-Z0-9\(\)\[\]\-]+', ' ', song_title).strip()
+    queries = []
+    # Start with the Hebrew-only version if it differs (e.g. "חלק מהזמן" from "Part of Time - חלק מהזמן")
     if he_only and he_only != song_title:
         queries.append(he_only)
+    queries.append(song_title)
+    if artist:
+        queries.append(f"{song_title} {artist}")
 
     def _score_match(result_text: str) -> int:
         """Score how well a Shironet result matches our song title (higher = better)."""
@@ -644,19 +646,27 @@ def _try_shironet(title: str):
             context.add_init_script(_stealth_js)
             page = context.new_page()
 
-            def _goto(url):
-                """Navigate with commit strategy; Shironet never reaches networkidle."""
+            def _goto_and_wait(url, wait_selector, timeout=60000):
+                """Navigate and wait for a specific element (smart wait instead of fixed sleep)."""
                 try:
                     page.goto(url, timeout=30000, wait_until="commit")
                 except PWTimeout:
                     pass
-                # Give PerimeterX JS time to run and reveal real content
-                page.wait_for_timeout(10000)
+                try:
+                    page.wait_for_selector(wait_selector, timeout=timeout)
+                    return True
+                except PWTimeout:
+                    return False
 
             song_href = None
             for query in queries:
                 encoded = urllib.parse.quote(query)
-                _goto(f"https://shironet.mako.co.il/searchSongs?q={encoded}")
+                found = _goto_and_wait(
+                    f"https://shironet.mako.co.il/searchSongs?q={encoded}",
+                    'a[href*="wrkid="]',
+                )
+                if not found:
+                    continue
 
                 # Results have type=lyrics in href (not type=words)
                 links = page.query_selector_all('a[href*="wrkid="][href*="type=lyrics"]')
@@ -690,7 +700,9 @@ def _try_shironet(title: str):
                 if song_href.startswith("/")
                 else song_href
             )
-            _goto(song_url)
+            found = _goto_and_wait(song_url, ".artist_lyrics_text", timeout=20000)
+            if not found:
+                return None
 
             lyrics_el = page.query_selector(".artist_lyrics_text")
             if not lyrics_el:
