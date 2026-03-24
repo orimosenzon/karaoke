@@ -120,6 +120,15 @@
       font-size: 1.1rem;
       font-weight: bold;
     }
+    #status-hint, #search-status-hint {
+      font-size: 0.78rem;
+      color: #555;
+      text-align: center;
+      min-height: 1.2em;
+      margin-top: -6px;
+      margin-bottom: 8px;
+      transition: opacity 0.5s;
+    }
 
     #progress-wrap, #search-progress-wrap {
       width: 100%;
@@ -656,6 +665,7 @@
       <div id="suggest-list"></div>
     </div>
     <div id="search-status"></div>
+    <div id="search-status-hint"></div>
     <div id="search-progress-wrap"><div id="search-progress-bar"></div></div>
     <footer id="site-footer">
       <a href="https://www.gnu.org/licenses/gpl-3.0.html" target="_blank" rel="noopener" title="GNU General Public License v3.0">
@@ -719,6 +729,7 @@
     </div>
     <div id="player-top">
       <div id="status"></div>
+      <div id="status-hint"></div>
       <div id="progress-wrap"><div id="progress-bar"></div></div>
       <div id="song-title"></div>
       <div id="song-credits"></div>
@@ -1110,12 +1121,21 @@
     }
 
     const STAGE_LABELS = {
-      starting:    'Starting…',
-      captions:    'Fetching captions…',
-      lrclib:      'Searching lyrics database…',
-      shironet:    'Searching Shironet…',
-      cached:      'Loading from cache…',
+      starting:  { label: 'Starting…',                hint: 'Connecting to YouTube…' },
+      captions:  { label: 'Fetching captions…',       hint: 'Looking for word-by-word timing in YouTube auto-captions' },
+      lrclib:    { label: 'Searching lyrics…',        hint: 'No captions found — checking LRClib lyrics database' },
+      shironet:  { label: 'Searching Shironet…',      hint: 'Opening a browser to search shironet.mako.co.il — this takes ~30 seconds' },
+      cached:    { label: 'Loading from cache…',      hint: '' },
     };
+    // Time-based escalation hints per stage (seconds → message)
+    const STAGE_HINTS_TIMED = {
+      starting:  [[8,  'Cold start — server is waking up, hang tight…'], [20, 'Still starting… (Railway free tier wakes up slowly)']],
+      captions:  [[10, 'YouTube is slow to respond — almost there…']],
+      lrclib:    [[8,  'Checking multiple lyrics databases…']],
+      shironet:  [[15, 'Still loading Shironet… the browser needs a moment'], [45, 'Shironet is taking longer than usual — please wait']],
+    };
+
+    let _hintStage = null, _hintTimers = [];
 
     function showScreen(name) {
       currentScreen = name;
@@ -1211,6 +1231,7 @@
       pendingSeekTime = startTime;
 
       setStatus('Starting…');
+      _startHintTimers('starting');
       setProgress('indeterminate');
 
       let jobId = null;
@@ -1252,6 +1273,8 @@
 
         setProgress('full');
         setStatus('');
+        _clearHintTimers();
+        _setHint('');
         segments = data.segments || [];
         isSynced = data.synced !== false;
         currentSongTitle = data.title || song.title;
@@ -1288,6 +1311,8 @@
         clearInterval(pollTimer);
         pollTimer = null;
         setStatus('Error: ' + e.message, true);
+        _clearHintTimers();
+        _setHint('');
         setProgress('hide');
       }
     }
@@ -1297,9 +1322,34 @@
       return m ? m[1] : null;
     }
 
+    function _clearHintTimers() {
+      _hintTimers.forEach(t => clearTimeout(t));
+      _hintTimers = [];
+      _hintStage = null;
+    }
+
+    function _setHint(msg) {
+      const isPlayer = currentScreen === 'player';
+      const el = document.getElementById(isPlayer ? 'status-hint' : 'search-status-hint');
+      if (el) el.textContent = msg;
+    }
+
+    function _startHintTimers(stage) {
+      if (_hintStage === stage) return;   // already running for this stage
+      _clearHintTimers();
+      _hintStage = stage;
+      const info = STAGE_LABELS[stage];
+      _setHint(info ? info.hint : '');
+      const timed = STAGE_HINTS_TIMED[stage] || [];
+      timed.forEach(([sec, msg]) => {
+        _hintTimers.push(setTimeout(() => { if (_hintStage === stage) _setHint(msg); }, sec * 1000));
+      });
+    }
+
     function updateProgressUI(s) {
-      const label = STAGE_LABELS[s.stage] || '';
-      setStatus(label);
+      const info = STAGE_LABELS[s.stage];
+      setStatus(info ? info.label : '');
+      _startHintTimers(s.stage);
       if (s.stage === 'captions') setProgress(40);
       else if (s.stage === 'lrclib') setProgress(60);
       else if (s.stage === 'shironet') setProgress(80);

@@ -415,6 +415,8 @@ def _parse_title_artist(title: str):
     the Latin transliteration suffix from Hebrew song titles (and vice versa).
     """
     cleaned = re.sub(r'\s*[\(\[][^\)\]]*[\)\]]', '', title).strip()
+    # Strip channel/transliteration suffix after | e.g. "חלק מהזמן | Idan Amedi"
+    cleaned = re.sub(r'\s*\|.*$', '', cleaned).strip()
     if ' - ' in cleaned:
         parts = cleaned.split(' - ', 1)
         song = parts[1].strip()
