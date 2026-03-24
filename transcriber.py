@@ -618,40 +618,68 @@ def _try_shironet(title: str):
             score += 3
         return score
 
+    # JS to hide headless browser fingerprint from Radware/PerimeterX detection
+    _stealth_js = """
+        Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+        Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]});
+        Object.defineProperty(navigator, 'languages', {get: () => ['he-IL', 'he', 'en-US', 'en']});
+        window.chrome = {runtime: {}};
+    """
+
     with sync_playwright() as p:
         browser = p.chromium.launch(
             headless=True,
-            args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
+            args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu",
+                  "--disable-blink-features=AutomationControlled"],
         )
         try:
-            page = browser.new_page()
-            page.set_extra_http_headers({"Accept-Language": "he-IL,he;q=0.9"})
+            context = browser.new_context(
+                user_agent=(
+                    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                    "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+                ),
+                viewport={"width": 1280, "height": 800},
+                locale="he-IL",
+            )
+            context.add_init_script(_stealth_js)
+            page = context.new_page()
+
+            def _goto(url):
+                """Navigate with commit strategy; Shironet never reaches networkidle."""
+                try:
+                    page.goto(url, timeout=30000, wait_until="commit")
+                except PWTimeout:
+                    pass
+                # Give PerimeterX JS time to run and reveal real content
+                page.wait_for_timeout(10000)
 
             song_href = None
             for query in queries:
                 encoded = urllib.parse.quote(query)
-                try:
-                    page.goto(
-                        f"https://shironet.mako.co.il/searchSongs?q={encoded}",
-                        timeout=20000, wait_until="networkidle",
-                    )
-                    page.wait_for_selector('a[href*="wrkid="]', timeout=8000)
-                except PWTimeout:
-                    continue
+                _goto(f"https://shironet.mako.co.il/searchSongs?q={encoded}")
 
-                links = page.query_selector_all('a[href*="wrkid="][href*="type=words"]')
+                # Results have type=lyrics in href (not type=words)
+                links = page.query_selector_all('a[href*="wrkid="][href*="type=lyrics"]')
                 candidates = []
                 for link in links[:15]:
                     href = link.get_attribute("href")
                     text = link.inner_text().strip()
-                    if href:
-                        candidates.append((text, href))
+                    if href and text:
+                        # Get artist name from parent row for better scoring
+                        row_text = link.evaluate(
+                            "el => el.closest('tr') ? el.closest('tr').innerText : ''"
+                        )
+                        candidates.append((text, href, row_text))
 
                 if candidates:
-                    # Pick the best matching result
-                    best = max(candidates, key=lambda c: _score_match(c[0]))
-                    song_href = best[1]
-                    break
+                    def _title_score(c):
+                        # Score only on song title match (not artist), to avoid
+                        # picking a different song just because artist name matches
+                        return _score_match(c[0])
+                    best = max(candidates, key=_title_score)
+                    if _title_score(best) > 0:
+                        song_href = best[1]
+                        break
 
             if not song_href:
                 return None
@@ -662,13 +690,9 @@ def _try_shironet(title: str):
                 if song_href.startswith("/")
                 else song_href
             )
-            try:
-                page.goto(song_url, timeout=20000, wait_until="networkidle")
-                page.wait_for_selector(".artist_lyrics_txt", timeout=8000)
-            except PWTimeout:
-                return None
+            _goto(song_url)
 
-            lyrics_el = page.query_selector(".artist_lyrics_txt")
+            lyrics_el = page.query_selector(".artist_lyrics_text")
             if not lyrics_el:
                 return None
 
@@ -681,7 +705,10 @@ def _try_shironet(title: str):
             return [{"text": line, "start": None, "end": None, "words": []} for line in lines]
 
         finally:
-            browser.close()
+            try:
+                browser.close()
+            except Exception:
+                pass
 
 
 def fetch_wikipedia_summary(song_title: str, artist: str = "", lang: str = "en") -> dict:
