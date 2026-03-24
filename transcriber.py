@@ -134,14 +134,19 @@ def process_url(url: str, title: str = "", on_stage=None):
             if plain:
                 segments, source = plain, "lrclib_plain"
             else:
-                segments, source = [], "none"
+                stage("shironet")
+                shironet = _try_shironet(title)
+                if shironet:
+                    segments, source = shironet, "shironet"
+                else:
+                    segments, source = [], "none"
 
     credits = _fetch_credits(title)
     lang = _detect_language(_lyrics_text(segments))
     data = {
         "id": vid_id, "title": title, "url": url,
         "segments": segments, "source": source,
-        "synced": source != "lrclib_plain",
+        "synced": source not in ("lrclib_plain", "shironet"),
         "lyricist":  credits.get("lyricist"),
         "composer":  credits.get("composer"),
         "arranger":  credits.get("arranger"),
@@ -567,6 +572,109 @@ def _google_translate(text: str, source: str, target: str) -> str:
     if not translated:
         raise ValueError("Empty response from Google Translate")
     return translated
+
+
+def _try_shironet(title: str):
+    """Fetch Hebrew lyrics from Shironet using Playwright headless browser.
+    Returns static (unsynced) segments or None if not found.
+    """
+    try:
+        from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
+    except ImportError:
+        return None
+
+    song_title, artist = _parse_title_artist(title)
+
+    # Build search queries from most specific to least
+    queries = []
+    if artist:
+        queries.append(f"{song_title} {artist}")
+    queries.append(song_title)
+    # Strip any Latin characters (transliteration) to get pure Hebrew title
+    he_only = re.sub(r'[a-zA-Z0-9\(\)\[\]\-]+', ' ', song_title).strip()
+    if he_only and he_only != song_title:
+        queries.append(he_only)
+
+    def _score_match(result_text: str) -> int:
+        """Score how well a Shironet result matches our song title (higher = better)."""
+        rt = result_text.lower()
+        st = song_title.lower()
+        art = artist.lower() if artist else ""
+        score = 0
+        if rt == st:
+            score += 10
+        elif st in rt:
+            score += 5
+        elif any(w in rt for w in st.split() if len(w) > 2):
+            score += 2
+        if art and art in rt:
+            score += 3
+        return score
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(
+            headless=True,
+            args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
+        )
+        try:
+            page = browser.new_page()
+            page.set_extra_http_headers({"Accept-Language": "he-IL,he;q=0.9"})
+
+            song_href = None
+            for query in queries:
+                encoded = urllib.parse.quote(query)
+                try:
+                    page.goto(
+                        f"https://shironet.mako.co.il/searchSongs?q={encoded}",
+                        timeout=20000, wait_until="networkidle",
+                    )
+                    page.wait_for_selector('a[href*="wrkid="]', timeout=8000)
+                except PWTimeout:
+                    continue
+
+                links = page.query_selector_all('a[href*="wrkid="][href*="type=words"]')
+                candidates = []
+                for link in links[:15]:
+                    href = link.get_attribute("href")
+                    text = link.inner_text().strip()
+                    if href:
+                        candidates.append((text, href))
+
+                if candidates:
+                    # Pick the best matching result
+                    best = max(candidates, key=lambda c: _score_match(c[0]))
+                    song_href = best[1]
+                    break
+
+            if not song_href:
+                return None
+
+            # Navigate to the song page
+            song_url = (
+                f"https://shironet.mako.co.il{song_href}"
+                if song_href.startswith("/")
+                else song_href
+            )
+            try:
+                page.goto(song_url, timeout=20000, wait_until="networkidle")
+                page.wait_for_selector(".artist_lyrics_txt", timeout=8000)
+            except PWTimeout:
+                return None
+
+            lyrics_el = page.query_selector(".artist_lyrics_txt")
+            if not lyrics_el:
+                return None
+
+            raw = lyrics_el.inner_text()
+            lines = [l.strip() for l in raw.splitlines() if l.strip()]
+            if not lines:
+                return None
+
+            print(f"Using Shironet lyrics ({len(lines)} lines)")
+            return [{"text": line, "start": None, "end": None, "words": []} for line in lines]
+
+        finally:
+            browser.close()
 
 
 def fetch_wikipedia_summary(song_title: str, artist: str = "", lang: str = "en") -> dict:

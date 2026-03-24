@@ -1113,6 +1113,7 @@
       starting:    'Starting…',
       captions:    'Fetching captions…',
       lrclib:      'Searching lyrics database…',
+      shironet:    'Searching Shironet…',
       cached:      'Loading from cache…',
     };
 
@@ -1256,7 +1257,7 @@
         currentSongTitle = data.title || song.title;
         document.getElementById('song-title').textContent = currentSongTitle;
         renderCredits(data);
-        const sourceMap = { youtube_captions: 'YouTube captions', lrclib: 'LRClib', lrclib_plain: 'LRClib (no sync)', none: 'none', cached: 'cached' };
+        const sourceMap = { youtube_captions: 'YouTube captions', lrclib: 'LRClib', lrclib_plain: 'LRClib (no sync)', shironet: 'Shironet', none: 'none', cached: 'cached' };
         console.log('[Letras] Lyrics source:', sourceMap[data.source] || data.source || 'unknown');
         renderLyrics(segments, isSynced);
 
@@ -1300,7 +1301,8 @@
       const label = STAGE_LABELS[s.stage] || '';
       setStatus(label);
       if (s.stage === 'captions') setProgress(40);
-      else if (s.stage === 'lrclib') setProgress(70);
+      else if (s.stage === 'lrclib') setProgress(60);
+      else if (s.stage === 'shironet') setProgress(80);
     }
 
     function setProgress(val) {
