@@ -46,11 +46,11 @@ def song_page(video_id):
     data = _find_song_by_yt_id(video_id)
     if data:
         og["title"] = data.get("title", "Letras")
-        og["description"] = ""
+        og["description"] = "Letras by Ori Mosenzon"
         og["image"] = f"https://img.youtube.com/vi/{video_id}/maxresdefault.jpg"
     else:
         og["title"] = "Letras"
-        og["description"] = "Song lyrics"
+        og["description"] = "Letras by Ori Mosenzon"
         og["image"] = f"https://img.youtube.com/vi/{video_id}/maxresdefault.jpg"
     return render_template("index.html", og=og)
 
