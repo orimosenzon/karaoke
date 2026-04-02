@@ -467,6 +467,13 @@ def _parse_title_artist(title: str):
                 kept = [s for s in segments if is_non_latin(s)]
                 song = ' - '.join(kept) if kept else segments[0]
         return song, artist
+    # Handle format: Artist "Song Title" extra info  (e.g. live on Ed Sullivan)
+    quote_match = re.search(r'["\u201c]([^"\u201d]+)["\u201d]', cleaned)
+    if quote_match:
+        song = quote_match.group(1).strip()
+        before = cleaned[:quote_match.start()].strip().rstrip('-,').strip()
+        artist = before if before else None
+        return song, artist
     return cleaned or title, None
 
 
