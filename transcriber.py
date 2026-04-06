@@ -16,7 +16,7 @@ import urllib.parse
 import concurrent.futures
 import yt_dlp
 
-STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
+STATIC_DIR = os.environ.get("CACHE_DIR", os.path.join(os.path.dirname(__file__), "static"))
 os.makedirs(STATIC_DIR, exist_ok=True)
 
 
