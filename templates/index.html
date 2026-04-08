@@ -830,7 +830,7 @@
           <button onclick="adjustOffset(0.5)">+0.5s</button>
           <button onclick="adjustOffset(1)">+1s</button>
         </div>
-        <div id="yt-player-wrap"><div id="yt-player"></div></div>
+        <div id="yt-player-wrap" style="position:relative"><div id="yt-player"></div><div id="unmute-overlay" onclick="unmuteAndHide()" style="display:none;position:absolute;inset:0;background:rgba(0,0,0,0.55);display:none;align-items:center;justify-content:center;cursor:pointer;border-radius:12px;"><span style="font-size:2.5rem">🔊</span><span style="color:#fff;font-size:1.1rem;margin-left:10px">הקש להפעלת סאונד</span></div></div>
       </div>
     </div>
     <div id="lyrics"></div>
@@ -934,11 +934,12 @@
         width: '100%',
         height: '100%',
         videoId: videoId,
-        playerVars: { autoplay: 1, rel: 0, start: seekTo > 0 ? Math.floor(seekTo) : 0 },
+        playerVars: { autoplay: 1, rel: 0, start: seekTo > 0 ? Math.floor(seekTo) : 0, mute: isMobile() ? 1 : 0 },
         events: {
           onReady: function(e) {
             if (seekTo > 0) e.target.seekTo(seekTo, true);
             e.target.playVideo();
+            if (isMobile()) showUnmuteOverlay();
             startSync();
           }
         }
@@ -946,6 +947,18 @@
     }
 
     var shareUpdateCounter = 0;
+    function isMobile() {
+      return /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+    }
+    function showUnmuteOverlay() {
+      var o = document.getElementById('unmute-overlay');
+      if (o) { o.style.display = 'flex'; }
+    }
+    function unmuteAndHide() {
+      if (ytPlayer && ytPlayer.unMute) { ytPlayer.unMute(); ytPlayer.setVolume(100); }
+      var o = document.getElementById('unmute-overlay');
+      if (o) o.style.display = 'none';
+    }
     function startSync() {
       stopSync();
       syncTimer = setInterval(function() {
